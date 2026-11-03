@@ -11,6 +11,7 @@ import (
 )
 
 func main() {
+	config.LoadEnvFile(".env")
 	cfg := config.FromEnv()
 
 	if len(cfg.APIKeys) == 0 {

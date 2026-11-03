@@ -226,6 +226,22 @@ func TestCodesDefaultType(t *testing.T) {
 	}
 }
 
+func TestKlineMinutePeriodRejectsAdjust(t *testing.T) {
+	h := New(&fakeProvider{}, nil)
+	w := do(h, "/api/v1/kline?code=600000&period=1m&adjust=qfq", nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("分钟K线要复权应返回 400，得到 %d", w.Code)
+	}
+}
+
+func TestKlineMinutePeriodNoAdjustOK(t *testing.T) {
+	h := New(&fakeProvider{}, nil)
+	w := do(h, "/api/v1/kline?code=600000&period=1m", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("分钟K线不复权应返回 200，得到 %d", w.Code)
+	}
+}
+
 func TestCodesBadType(t *testing.T) {
 	h := New(&fakeProvider{}, nil)
 	w := do(h, "/api/v1/codes?type=bond", nil)

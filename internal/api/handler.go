@@ -76,6 +76,10 @@ func handleKline(p tdx.Provider) http.HandlerFunc {
 				fail(w, http.StatusBadRequest, "adjust 取值: none/qfq/hfq")
 				return
 			}
+			if adjust != tdx.AdjustNone && isMinutePeriod(period) {
+				fail(w, http.StatusBadRequest, "分钟K线不支持复权，请将 adjust 设为 none")
+				return
+			}
 		}
 		count := 100
 		if v := strings.TrimSpace(r.URL.Query().Get("count")); v != "" {
@@ -204,6 +208,14 @@ func validPeriod(p tdx.Period) bool {
 func validAdjust(a tdx.Adjust) bool {
 	switch a {
 	case tdx.AdjustNone, tdx.AdjustQFQ, tdx.AdjustHFQ:
+		return true
+	}
+	return false
+}
+
+func isMinutePeriod(p tdx.Period) bool {
+	switch p {
+	case tdx.Period1Min, tdx.Period5Min, tdx.Period15Min, tdx.Period30Min, tdx.Period60Min:
 		return true
 	}
 	return false
