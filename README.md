@@ -4,8 +4,32 @@
 
 ## 运行
 
+### Docker Compose（推荐）
+
+```bash
+cp .env.example .env      # 填入自己的 key
+vim .env
+docker compose up -d                                    # 本地构建并启动
+docker compose logs -f                                  # 看日志
+docker compose down                                     # 停止
+```
+
+默认从本地 `Dockerfile` 构建。若只想用 GHCR 上的镜像，注释掉 `docker-compose.yml` 里的 `build: .` 再：
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+### Docker
+
 ```bash
 docker run -d -p 8080:8080 -e TDX_API_KEYS=key1,key2 ghcr.io/garretqaq/tdx-api:latest
+```
+
+### 本地直接运行
+
+```bash
+go run .          # 自动读取当前目录的 .env
 ```
 
 | 环境变量 | 默认值 | 说明 |
