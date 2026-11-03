@@ -1,0 +1,4 @@
+/tdx-api
+/data/
+*.log
+.DS_Store
