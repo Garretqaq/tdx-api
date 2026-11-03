@@ -1,6 +1,8 @@
 // Package tdx 封装对通达信行情服务器的访问，定义本服务自己的数据类型。
 package tdx
 
+import "strings"
+
 // Quote 行情快照。
 type Quote struct {
 	Code       string  `json:"code"`        // 带市场前缀，如 sh600000
@@ -26,58 +28,33 @@ type Level struct {
 	Volume int     `json:"volume"`
 }
 
-// Orderbook 扁平化的五档盘口，供只支持平面字段映射的调用方使用。
-// 缺失的档位（如指数）为 null。
-type Orderbook struct {
-	Code       string   `json:"code"` // 带市场前缀，如 sh600000
-	Bid1Price  *float64 `json:"bid1_price"`
-	Bid1Volume *int     `json:"bid1_volume"`
-	Bid2Price  *float64 `json:"bid2_price"`
-	Bid2Volume *int     `json:"bid2_volume"`
-	Bid3Price  *float64 `json:"bid3_price"`
-	Bid3Volume *int     `json:"bid3_volume"`
-	Bid4Price  *float64 `json:"bid4_price"`
-	Bid4Volume *int     `json:"bid4_volume"`
-	Bid5Price  *float64 `json:"bid5_price"`
-	Bid5Volume *int     `json:"bid5_volume"`
-	Ask1Price  *float64 `json:"ask1_price"`
-	Ask1Volume *int     `json:"ask1_volume"`
-	Ask2Price  *float64 `json:"ask2_price"`
-	Ask2Volume *int     `json:"ask2_volume"`
-	Ask3Price  *float64 `json:"ask3_price"`
-	Ask3Volume *int     `json:"ask3_volume"`
-	Ask4Price  *float64 `json:"ask4_price"`
-	Ask4Volume *int     `json:"ask4_volume"`
-	Ask5Price  *float64 `json:"ask5_price"`
-	Ask5Volume *int     `json:"ask5_volume"`
+// Depth5Row 五档盘口，格式对齐行情面板的 depth5 数据集契约：
+// bids/asks 为 [[价, 量], ...]，按一档到五档排列，价格单位元、量单位手。
+// 指数没有真实盘口，bids/asks 为空数组。
+type Depth5Row struct {
+	Code string       `json:"code"` // 代码，写法由请求参数 format 决定
+	Bids [][2]float64 `json:"bids"`
+	Asks [][2]float64 `json:"asks"`
 }
 
-// ToOrderbook 把行情快照的盘口摊平。价格单位元，量单位手。
-func ToOrderbook(q Quote) Orderbook {
-	o := Orderbook{Code: q.Code}
-	bids := [5]struct {
-		p **float64
-		v **int
-	}{
-		{&o.Bid1Price, &o.Bid1Volume}, {&o.Bid2Price, &o.Bid2Volume}, {&o.Bid3Price, &o.Bid3Volume},
-		{&o.Bid4Price, &o.Bid4Volume}, {&o.Bid5Price, &o.Bid5Volume},
+// ToDepth5 把行情快照的盘口转成 depth5 行。
+func ToDepth5(q Quote) Depth5Row {
+	row := Depth5Row{Code: q.Code, Bids: [][2]float64{}, Asks: [][2]float64{}}
+	for _, l := range q.Bids {
+		row.Bids = append(row.Bids, [2]float64{l.Price, float64(l.Volume)})
 	}
-	asks := [5]struct {
-		p **float64
-		v **int
-	}{
-		{&o.Ask1Price, &o.Ask1Volume}, {&o.Ask2Price, &o.Ask2Volume}, {&o.Ask3Price, &o.Ask3Volume},
-		{&o.Ask4Price, &o.Ask4Volume}, {&o.Ask5Price, &o.Ask5Volume},
+	for _, l := range q.Asks {
+		row.Asks = append(row.Asks, [2]float64{l.Price, float64(l.Volume)})
 	}
-	for i := 0; i < len(q.Bids) && i < 5; i++ {
-		l := q.Bids[i]
-		*bids[i].p, *bids[i].v = &l.Price, &l.Volume
+	return row
+}
+
+// DotCode 把 "sh600000" 转成 "600000.SH"；其他写法原样返回。
+func DotCode(full string) string {
+	if len(full) != 8 {
+		return full
 	}
-	for i := 0; i < len(q.Asks) && i < 5; i++ {
-		l := q.Asks[i]
-		*asks[i].p, *asks[i].v = &l.Price, &l.Volume
-	}
-	return o
+	return full[2:] + "." + strings.ToUpper(full[:2])
 }
 
 // KlineBar 一根K线。
@@ -143,16 +120,19 @@ type XRXDRow struct {
 // FactorRow 一条除权事件的仿射复权系数。
 // 前复权价格 = round2(QFQMul * raw_price + QFQAdd)
 type FactorRow struct {
-	Code       string  `json:"code"`        // 带市场前缀，如 sh600000
-	Date       string  `json:"date"`        // 除权日 "2006-01-02"
-	Cash       float64 `json:"cash"`        // 每股派现（元）
-	Bonus      float64 `json:"bonus"`       // 每股送转
-	Allot      float64 `json:"allot"`       // 每股配股
-	AllotPrice float64 `json:"allot_price"` // 配股价（元）
-	M          float64 `json:"m"`           // 单次乘法因子
-	C          float64 `json:"c"`           // 单次加法偏移（每股净现金流出，元）
-	QFQMul     float64 `json:"qfq_mul"`     // 该事件之前历史价格的累积前复权乘数
-	QFQAdd     float64 `json:"qfq_add"`     // 累积前复权加法偏移（元）
+	Code       string   `json:"code"`        // 带市场前缀，如 sh600000
+	Date       string   `json:"date"`        // 除权日 "2006-01-02"
+	Cash       float64  `json:"cash"`        // 每股派现（元）
+	Bonus      float64  `json:"bonus"`       // 每股送转
+	Allot      float64  `json:"allot"`       // 每股配股
+	AllotPrice float64  `json:"allot_price"` // 配股价（元）
+	M          float64  `json:"m"`           // 单次乘法因子
+	C          float64  `json:"c"`           // 单次加法偏移（每股净现金流出，元）
+	QFQMul     float64  `json:"qfq_mul"`     // 该事件之前历史价格的累积前复权乘数
+	QFQAdd     float64  `json:"qfq_add"`     // 累积前复权加法偏移（元）
+	// ExFactor 单事件比值 = 除权前收盘 / 除权参考价，与行情面板的 adj_factor
+	// 契约一致（非累积）。拿不到前收盘时为 null。
+	ExFactor *float64 `json:"ex_factor"`
 }
 
 // CodeInfo 证券代码信息。

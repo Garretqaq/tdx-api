@@ -755,7 +755,43 @@ func (c *Client) Factors(code string) ([]FactorRow, error) {
 			QFQAdd:     round(qfqAdd[i], 6),
 		}
 	}
-	return out, nil
+	return c.attachExFactor(full, out), nil
+}
+
+// attachExFactor 用不复权日K的前收盘补算出每条事件的单事件复权比值：
+// ex_factor = 前收盘 × m / (前收盘 − c)，即 除权前收盘 / 除权参考价。
+// 这是行情面板 adj_factor 契约要求的口径（每次除权的 pre/post 比值，非累积）。
+// 拿不到前收盘（日K未覆盖该日期）时留空，交由下游按缺失处理。
+func (c *Client) attachExFactor(full string, rows []FactorRow) []FactorRow {
+	if len(rows) == 0 {
+		return rows
+	}
+	bars, err := c.Klines(full, PeriodDay, AdjustNone, 0)
+	if err != nil || len(bars) == 0 {
+		return rows
+	}
+	return exFactors(rows, bars)
+}
+
+// exFactors 纯计算：用升序日K给每条事件填前收盘除权比值。
+func exFactors(rows []FactorRow, bars []KlineBar) []FactorRow {
+	j := 0 // bars 与 rows 均按日期升序，共用游标即可
+	for i := range rows {
+		for j < len(bars) && bars[j].Time < rows[i].Date {
+			j++
+		}
+		if j == 0 {
+			continue
+		}
+		p := bars[j-1].Close
+		den := p - rows[i].C
+		if p <= 0 || den <= 0 {
+			continue
+		}
+		v := round(p*rows[i].M/den, 6)
+		rows[i].ExFactor = &v
+	}
+	return rows
 }
 
 // ---- XRXD ----

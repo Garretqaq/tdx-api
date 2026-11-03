@@ -217,7 +217,7 @@ func levels(pv ...float64) []tdx.Level {
 	return out
 }
 
-func TestOrderbookFlat(t *testing.T) {
+func TestDepth5Nested(t *testing.T) {
 	f := &fakeProvider{quotes: []tdx.Quote{
 		{
 			Code: "sh600000",
@@ -226,12 +226,16 @@ func TestOrderbookFlat(t *testing.T) {
 		},
 		{Code: "sh000001", Bids: []tdx.Level{}, Asks: []tdx.Level{}},
 	}}
-	w := do(New(f, nil), "/api/v1/orderbook?codes=600000,sh000001", nil)
+	w := do(New(f, nil), "/api/v1/depth5?codes=600000,sh000001&format=dot", nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("应返回 200，得到 %d", w.Code)
 	}
 	var r struct {
-		Data []map[string]any `json:"data"`
+		Data []struct {
+			Code string       `json:"code"`
+			Bids [][2]float64 `json:"bids"`
+			Asks [][2]float64 `json:"asks"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &r); err != nil {
 		t.Fatalf("响应不是合法 JSON: %v", err)
@@ -240,28 +244,40 @@ func TestOrderbookFlat(t *testing.T) {
 		t.Fatalf("应返回 2 行，得到 %d", len(r.Data))
 	}
 	stock, index := r.Data[0], r.Data[1]
-	want := map[string]float64{
-		"bid1_price": 10.09, "bid1_volume": 778, "bid5_price": 10.05, "bid5_volume": 238,
-		"ask1_price": 10.1, "ask1_volume": 179, "ask5_price": 10.14, "ask5_volume": 220,
+	if stock.Code != "600000.SH" {
+		t.Errorf("code = %q，期望 600000.SH", stock.Code)
 	}
-	for k, v := range want {
-		if stock[k] != v {
-			t.Errorf("%s = %v，期望 %v", k, stock[k], v)
-		}
+	if len(stock.Bids) != 5 || len(stock.Asks) != 5 {
+		t.Fatalf("五档不完整: bids=%d asks=%d", len(stock.Bids), len(stock.Asks))
 	}
-	if stock["code"] != "sh600000" {
-		t.Errorf("code = %v", stock["code"])
+	if stock.Bids[0] != [2]float64{10.09, 778} {
+		t.Errorf("买一 = %v，期望 [10.09 778]", stock.Bids[0])
 	}
-	for _, k := range []string{"bid1_price", "bid1_volume", "ask5_price", "ask5_volume"} {
-		v, present := index[k]
-		if !present || v != nil {
-			t.Errorf("指数 %s 应为 null，得到 %v（存在=%v）", k, v, present)
+	if stock.Asks[4] != [2]float64{10.14, 220} {
+		t.Errorf("卖五 = %v，期望 [10.14 220]", stock.Asks[4])
+	}
+	// 指数无盘口：必须是空数组而不是 null，否则面板会把 null 当缺失列
+	if index.Code != "000001.SH" {
+		t.Errorf("指数 code = %q，期望 000001.SH", index.Code)
+	}
+	if len(index.Bids) != 0 || len(index.Asks) != 0 {
+		t.Errorf("指数盘口应为空数组，得到 bids=%v asks=%v", index.Bids, index.Asks)
+	}
+	var raw struct {
+		Data []map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"bids", "asks"} {
+		if got := string(raw.Data[1][k]); got != "[]" {
+			t.Errorf("指数 %s 序列化为 %s，期望 []", k, got)
 		}
 	}
 }
 
-func TestOrderbookMissingCodes(t *testing.T) {
-	w := do(New(&fakeProvider{}, nil), "/api/v1/orderbook", nil)
+func TestDepth5MissingCodes(t *testing.T) {
+	w := do(New(&fakeProvider{}, nil), "/api/v1/depth5", nil)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("缺少 codes 应返回 400，得到 %d", w.Code)
 	}
@@ -300,6 +316,20 @@ func TestKlineNegativeCount(t *testing.T) {
 	w := do(h, "/api/v1/kline?code=600000&count=-1", nil)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("负数 count 应返回 400，得到 %d", w.Code)
+	}
+}
+
+func TestKlineDotCode(t *testing.T) {
+	f := &fakeProvider{klines: []tdx.KlineBar{{Code: "sh600000", Time: "2026-11-03", Close: 10.09}}}
+	w := do(New(f, nil), "/api/v1/kline?code=sh600000&format=dot", nil)
+	assertRowCode(t, w, "600000.SH")
+}
+
+func TestKlineAcceptsDotCode(t *testing.T) {
+	f := &fakeProvider{klines: []tdx.KlineBar{{Code: "sh600000", Time: "2026-11-03", Close: 10.09}}}
+	w := do(New(f, nil), "/api/v1/kline?code=sh600000", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("dot 写法应被接受，得到 %d", w.Code)
 	}
 }
 

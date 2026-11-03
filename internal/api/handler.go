@@ -18,7 +18,7 @@ func New(p tdx.Provider, keys []string) http.Handler {
 
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/quote", handleQuote(p))
-	api.HandleFunc("GET /api/v1/orderbook", handleOrderbook(p))
+	api.HandleFunc("GET /api/v1/depth5", handleDepth5(p))
 	api.HandleFunc("GET /api/v1/kline", handleKline(p))
 	api.HandleFunc("GET /api/v1/minute", handleMinute(p))
 	api.HandleFunc("GET /api/v1/trade", handleTrade(p))
@@ -36,22 +36,40 @@ func handleQuote(p tdx.Provider) http.HandlerFunc {
 		if done {
 			return
 		}
+		if wantsDotCode(r) {
+			for i := range qs {
+				qs[i].Code = tdx.DotCode(qs[i].Code)
+			}
+		}
 		ok(w, qs)
 	}
 }
 
-func handleOrderbook(p tdx.Provider) http.HandlerFunc {
+// handleDepth5 返回五档盘口，字段与行情面板的 depth5 数据集一致：
+// code + bids/asks（[[价, 量], ...]）。
+func handleDepth5(p tdx.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		qs, done := fetchQuotes(w, r, p)
 		if done {
 			return
 		}
-		out := make([]tdx.Orderbook, len(qs))
+		out := make([]tdx.Depth5Row, len(qs))
 		for i, q := range qs {
-			out[i] = tdx.ToOrderbook(q)
+			out[i] = tdx.ToDepth5(q)
+		}
+		if wantsDotCode(r) {
+			for i := range out {
+				out[i].Code = tdx.DotCode(out[i].Code)
+			}
 		}
 		ok(w, out)
 	}
+}
+
+// wantsDotCode 请求是否要求 "600000.SH" 写法的代码（format=dot）。
+// 默认写 "sh600000"。
+func wantsDotCode(r *http.Request) bool {
+	return strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("format")), "dot")
 }
 
 // fetchQuotes 解析 codes 参数并查询行情快照；出错时已写响应，返回 done=true。
@@ -113,6 +131,11 @@ func handleKline(p tdx.Provider) http.HandlerFunc {
 		if err != nil {
 			fail(w, http.StatusBadGateway, err.Error())
 			return
+		}
+		if wantsDotCode(r) {
+			for i := range bars {
+				bars[i].Code = tdx.DotCode(bars[i].Code)
+			}
 		}
 		ok(w, bars)
 	}
@@ -199,6 +222,11 @@ func handleFactor(p tdx.Provider) http.HandlerFunc {
 		if err != nil {
 			fail(w, http.StatusBadGateway, err.Error())
 			return
+		}
+		if wantsDotCode(r) {
+			for i := range fs {
+				fs[i].Code = tdx.DotCode(fs[i].Code)
+			}
 		}
 		ok(w, fs)
 	}

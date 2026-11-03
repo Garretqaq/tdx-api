@@ -51,6 +51,12 @@ func TestParseCode(t *testing.T) {
 		{in: "sh000001", ex: ExchangeSH, num: "000001"},
 		{in: "399001", ex: ExchangeSZ, num: "399001"},
 		{in: "920001", ex: ExchangeBJ, num: "920001"},
+		{in: "sh600000", ex: ExchangeSH, num: "600000"},
+		{in: "600000.sh", ex: ExchangeSH, num: "600000"},
+		{in: "000001.SZ", ex: ExchangeSZ, num: "000001"},
+		{in: "920001.BJ", ex: ExchangeBJ, num: "920001"},
+		{in: "600000.XX", fail: true},
+		{in: "60000.SH", fail: true},
 		{in: "abc", fail: true},
 		{in: "xx600000", fail: true},
 	}

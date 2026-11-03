@@ -57,9 +57,25 @@ func isSHETF(num string) bool {
 // IsETFCode 判断带前缀代码是否为 ETF。
 func IsETFCode(full string) bool { return Kind(full) == "etf" }
 
-// ParseCode 解析 "sh600000" / "SZ000001" / "600000"，返回市场码和 6 位代码。
+// ParseCode 解析 "sh600000" / "SZ000001" / "600000" / "600000.SH"，
+// 返回市场码和 6 位代码。
 func ParseCode(s string) (uint8, string, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		num, market := s[:i], s[i+1:]
+		if len(num) != 6 || !isDigits(num) {
+			return 0, "", fmt.Errorf("代码格式错误: %q，应为 600000.SH", s)
+		}
+		switch market {
+		case "sh":
+			return ExchangeSH, num, nil
+		case "sz":
+			return ExchangeSZ, num, nil
+		case "bj":
+			return ExchangeBJ, num, nil
+		}
+		return 0, "", fmt.Errorf("不支持的市场后缀: %q", market)
+	}
 	if len(s) == 6 && isDigits(s) {
 		full := AddPrefix(s)
 		if full == s {
