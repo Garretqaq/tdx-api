@@ -9,16 +9,15 @@
 ```bash
 cp .env.example .env      # 填入自己的 key
 vim .env
-docker compose up -d                                    # 本地构建并启动
+docker compose pull       # 从 GHCR 拉取镜像
+docker compose up -d
 docker compose logs -f                                  # 看日志
 docker compose down                                     # 停止
+docker compose pull && docker compose up -d             # 更新到最新镜像
 ```
 
-默认从本地 `Dockerfile` 构建。若只想用 GHCR 上的镜像，注释掉 `docker-compose.yml` 里的 `build: .` 再：
-
-```bash
-docker compose pull && docker compose up -d
-```
+镜像已由 GitHub Actions 构建（amd64/arm64）并推送到 GHCR，compose 只拉不构建。
+若拉取报权限错误，先把 GHCR 包设为 public，或执行 `docker login ghcr.io`。
 
 ### Docker
 

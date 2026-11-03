@@ -1,7 +1,6 @@
 services:
   tdx-api:
-    # 默认本地构建；只想用 GHCR 镜像时注释掉 build 段，执行 docker compose pull
-    build: .
+    # 镜像由 GitHub Actions 构建并推送到 GHCR，这里直接拉取
     image: ghcr.io/garretqaq/tdx-api:latest
     container_name: tdx-api
     restart: unless-stopped
