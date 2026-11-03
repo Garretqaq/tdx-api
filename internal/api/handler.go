@@ -23,6 +23,7 @@ func New(p tdx.Provider, keys []string) http.Handler {
 	api.HandleFunc("GET /api/v1/trade", handleTrade(p))
 	api.HandleFunc("GET /api/v1/codes", handleCodes(p))
 	api.HandleFunc("GET /api/v1/xrxd", handleXRXD(p))
+	api.HandleFunc("GET /api/v1/factor", handleFactor(p))
 
 	mux.Handle("/api/", apiKeyAuth(keys, api))
 	return mux
@@ -161,6 +162,22 @@ func handleXRXD(p tdx.Provider) http.HandlerFunc {
 			return
 		}
 		ok(w, xs)
+	}
+}
+
+func handleFactor(p tdx.Provider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		code := strings.TrimSpace(r.URL.Query().Get("code"))
+		if code == "" {
+			fail(w, http.StatusBadRequest, "参数 code 不能为空")
+			return
+		}
+		fs, err := p.Factors(code)
+		if err != nil {
+			fail(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		ok(w, fs)
 	}
 }
 

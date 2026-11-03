@@ -662,6 +662,75 @@ func (c *Client) Codes(kind string) ([]CodeInfo, error) {
 	return out, nil
 }
 
+// Factors 返回某证券各除权事件的仿射复权系数，按日期升序。
+func (c *Client) Factors(code string) ([]FactorRow, error) {
+	full, err := protocol.FullCode(code)
+	if err != nil {
+		return nil, err
+	}
+	var xs []*protocol.XRXD
+	err = c.pool.do(func(conn *protocol.Conn) error {
+		req, e := protocol.ReqGbbq(full)
+		if e != nil {
+			return e
+		}
+		bs, e := conn.Do(req.Type, req.Data)
+		if e != nil {
+			return e
+		}
+		xs, e = protocol.DecodeXRXDs(bs)
+		return e
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 收集事件（已按时间升序）
+	type ev struct {
+		x    *protocol.XRXD
+		m, c float64
+	}
+	evs := make([]ev, 0, len(xs))
+	for _, x := range xs {
+		m := (10 + x.Songzhuangu + x.Peigu) / 10
+		if m == 0 {
+			m = 1
+		}
+		c := (x.Fenhong - x.Peigu*x.Peigujia) / 10
+		evs = append(evs, ev{x: x, m: m, c: c})
+	}
+
+	// 即使没有 K 线数据，也能算出每条除权事件对应的累积前复权系数。
+	// 将事件从最新向最早回溯（与复权展开方向一致），最新事件前的累积系数为 (1, 0)。
+	n := len(evs)
+	qfqMul := make([]float64, n)
+	qfqAdd := make([]float64, n)
+	a, b := 1.0, 0.0
+	for i := n - 1; i >= 0; i-- {
+		a = a / evs[i].m
+		b = b - a*evs[i].c
+		qfqMul[i] = a
+		qfqAdd[i] = b
+	}
+
+	out := make([]FactorRow, n)
+	for i, e := range evs {
+		x := e.x
+		out[i] = FactorRow{
+			Date:       x.Time.Format("2006-01-02"),
+			Cash:       round(x.Fenhong/10, 4),
+			Bonus:      round(x.Songzhuangu/10, 4),
+			Allot:      round(x.Peigu/10, 4),
+			AllotPrice: round(x.Peigujia, 4),
+			M:          round(e.m, 6),
+			C:          round(e.c, 6),
+			QFQMul:     round(qfqMul[i], 6),
+			QFQAdd:     round(qfqAdd[i], 6),
+		}
+	}
+	return out, nil
+}
+
 // ---- XRXD ----
 
 func (c *Client) XRXD(code string) ([]XRXDRow, error) {

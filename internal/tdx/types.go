@@ -85,6 +85,20 @@ type XRXDRow struct {
 	Bonus float64 `json:"bonus"` // 每股送转股数
 }
 
+// FactorRow 一条除权事件的仿射复权系数。
+// 前复权价格 = round2(QFQMul * raw_price + QFQAdd)
+type FactorRow struct {
+	Date       string  `json:"date"`        // 除权日 "2006-01-02"
+	Cash       float64 `json:"cash"`        // 每股派现（元）
+	Bonus      float64 `json:"bonus"`       // 每股送转
+	Allot      float64 `json:"allot"`       // 每股配股
+	AllotPrice float64 `json:"allot_price"` // 配股价（元）
+	M          float64 `json:"m"`           // 单次乘法因子
+	C          float64 `json:"c"`           // 单次加法偏移（每股净现金流出，元）
+	QFQMul     float64 `json:"qfq_mul"`     // 该事件之前历史价格的累积前复权乘数
+	QFQAdd     float64 `json:"qfq_add"`     // 累积前复权加法偏移（元）
+}
+
 // CodeInfo 证券代码信息。
 type CodeInfo struct {
 	Code   string `json:"code"`   // 带市场前缀，如 sh600000

@@ -15,4 +15,6 @@ type Provider interface {
 	Codes(kind string) ([]CodeInfo, error)
 	// XRXD 返回某证券的除权除息记录，按日期升序。
 	XRXD(code string) ([]XRXDRow, error)
+	// Factors 返回某证券各除权事件的仿射复权系数，按日期升序。
+	Factors(code string) ([]FactorRow, error)
 }

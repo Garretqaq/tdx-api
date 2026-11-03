@@ -53,6 +53,10 @@ func (f *fakeProvider) Codes(kind string) ([]tdx.CodeInfo, error) { return f.cod
 
 func (f *fakeProvider) XRXD(code string) ([]tdx.XRXDRow, error) { return f.xrxd, nil }
 
+func (f *fakeProvider) Factors(code string) ([]tdx.FactorRow, error) {
+	return []tdx.FactorRow{{Date: "2026-07-16", Cash: 0.42, M: 1, C: 0.042, QFQMul: 0.95, QFQAdd: -0.42}}, nil
+}
+
 func do(h http.Handler, path string, headers map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	for k, v := range headers {
