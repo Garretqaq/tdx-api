@@ -46,6 +46,7 @@ go run .          # 自动读取当前目录的 .env
 
 ```
 GET /api/v1/quote?codes=600000,510300,sh000001      # 五档行情，最多 50 只
+GET /api/v1/orderbook?codes=600000,510300           # 扁平五档盘口 bid1_price…ask5_volume，最多 50 只
 GET /api/v1/kline?code=600000&period=day&adjust=qfq&count=100
 GET /api/v1/minute?code=600000[&date=20261102]      # 分时，不传 date 为当日
 GET /api/v1/trade?code=600000[&date=20261102]       # 分笔成交，不传 date 为当日
@@ -64,7 +65,7 @@ GET /healthz
 
 - 北交所不支持代码表协议，`/codes` 只含沪深；北交所个股的行情、K 线可直接按代码查询
 - 行情快照的 `time` 字段为空（通达信返回的时间编码未确认）
-- 指数的 `bids`/`asks` 为空数组
+- 指数的 `bids`/`asks` 为空数组，`/orderbook` 中对应字段为 `null`
 - 代码表异步加载，启动后数秒内 `/codes` 为空、`name` 为空
 
 ## 开发

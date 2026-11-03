@@ -13,6 +13,7 @@ import (
 // fakeProvider 用假数据实现 tdx.Provider，供 HTTP 层单测使用。
 type fakeProvider struct {
 	quotesErr error
+	quotes    []tdx.Quote
 	klines    []tdx.KlineBar
 	xrxd      []tdx.XRXDRow
 	codes     []tdx.CodeInfo
@@ -26,6 +27,9 @@ type fakeProvider struct {
 func (f *fakeProvider) Quotes(codes []string) ([]tdx.Quote, error) {
 	if f.quotesErr != nil {
 		return nil, f.quotesErr
+	}
+	if f.quotes != nil {
+		return f.quotes, nil
 	}
 	out := make([]tdx.Quote, len(codes))
 	for i, c := range codes {
@@ -203,6 +207,64 @@ func TestKlineResponseHasCode(t *testing.T) {
 func TestFactorResponseHasCode(t *testing.T) {
 	w := do(New(&fakeProvider{}, nil), "/api/v1/factor?code=600000", nil)
 	assertRowCode(t, w, "sh600000")
+}
+
+func levels(pv ...float64) []tdx.Level {
+	out := make([]tdx.Level, 0, len(pv)/2)
+	for i := 0; i+1 < len(pv); i += 2 {
+		out = append(out, tdx.Level{Price: pv[i], Volume: int(pv[i+1])})
+	}
+	return out
+}
+
+func TestOrderbookFlat(t *testing.T) {
+	f := &fakeProvider{quotes: []tdx.Quote{
+		{
+			Code: "sh600000",
+			Bids: levels(10.09, 778, 10.08, 468, 10.07, 279, 10.06, 699, 10.05, 238),
+			Asks: levels(10.1, 179, 10.11, 1524, 10.12, 91, 10.13, 2695, 10.14, 220),
+		},
+		{Code: "sh000001", Bids: []tdx.Level{}, Asks: []tdx.Level{}},
+	}}
+	w := do(New(f, nil), "/api/v1/orderbook?codes=600000,sh000001", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("应返回 200，得到 %d", w.Code)
+	}
+	var r struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &r); err != nil {
+		t.Fatalf("响应不是合法 JSON: %v", err)
+	}
+	if len(r.Data) != 2 {
+		t.Fatalf("应返回 2 行，得到 %d", len(r.Data))
+	}
+	stock, index := r.Data[0], r.Data[1]
+	want := map[string]float64{
+		"bid1_price": 10.09, "bid1_volume": 778, "bid5_price": 10.05, "bid5_volume": 238,
+		"ask1_price": 10.1, "ask1_volume": 179, "ask5_price": 10.14, "ask5_volume": 220,
+	}
+	for k, v := range want {
+		if stock[k] != v {
+			t.Errorf("%s = %v，期望 %v", k, stock[k], v)
+		}
+	}
+	if stock["code"] != "sh600000" {
+		t.Errorf("code = %v", stock["code"])
+	}
+	for _, k := range []string{"bid1_price", "bid1_volume", "ask5_price", "ask5_volume"} {
+		v, present := index[k]
+		if !present || v != nil {
+			t.Errorf("指数 %s 应为 null，得到 %v（存在=%v）", k, v, present)
+		}
+	}
+}
+
+func TestOrderbookMissingCodes(t *testing.T) {
+	w := do(New(&fakeProvider{}, nil), "/api/v1/orderbook", nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("缺少 codes 应返回 400，得到 %d", w.Code)
+	}
 }
 
 func TestKlineParams(t *testing.T) {

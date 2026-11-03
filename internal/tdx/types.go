@@ -26,6 +26,60 @@ type Level struct {
 	Volume int     `json:"volume"`
 }
 
+// Orderbook 扁平化的五档盘口，供只支持平面字段映射的调用方使用。
+// 缺失的档位（如指数）为 null。
+type Orderbook struct {
+	Code       string   `json:"code"` // 带市场前缀，如 sh600000
+	Bid1Price  *float64 `json:"bid1_price"`
+	Bid1Volume *int     `json:"bid1_volume"`
+	Bid2Price  *float64 `json:"bid2_price"`
+	Bid2Volume *int     `json:"bid2_volume"`
+	Bid3Price  *float64 `json:"bid3_price"`
+	Bid3Volume *int     `json:"bid3_volume"`
+	Bid4Price  *float64 `json:"bid4_price"`
+	Bid4Volume *int     `json:"bid4_volume"`
+	Bid5Price  *float64 `json:"bid5_price"`
+	Bid5Volume *int     `json:"bid5_volume"`
+	Ask1Price  *float64 `json:"ask1_price"`
+	Ask1Volume *int     `json:"ask1_volume"`
+	Ask2Price  *float64 `json:"ask2_price"`
+	Ask2Volume *int     `json:"ask2_volume"`
+	Ask3Price  *float64 `json:"ask3_price"`
+	Ask3Volume *int     `json:"ask3_volume"`
+	Ask4Price  *float64 `json:"ask4_price"`
+	Ask4Volume *int     `json:"ask4_volume"`
+	Ask5Price  *float64 `json:"ask5_price"`
+	Ask5Volume *int     `json:"ask5_volume"`
+}
+
+// ToOrderbook 把行情快照的盘口摊平。价格单位元，量单位手。
+func ToOrderbook(q Quote) Orderbook {
+	o := Orderbook{Code: q.Code}
+	bids := [5]struct {
+		p **float64
+		v **int
+	}{
+		{&o.Bid1Price, &o.Bid1Volume}, {&o.Bid2Price, &o.Bid2Volume}, {&o.Bid3Price, &o.Bid3Volume},
+		{&o.Bid4Price, &o.Bid4Volume}, {&o.Bid5Price, &o.Bid5Volume},
+	}
+	asks := [5]struct {
+		p **float64
+		v **int
+	}{
+		{&o.Ask1Price, &o.Ask1Volume}, {&o.Ask2Price, &o.Ask2Volume}, {&o.Ask3Price, &o.Ask3Volume},
+		{&o.Ask4Price, &o.Ask4Volume}, {&o.Ask5Price, &o.Ask5Volume},
+	}
+	for i := 0; i < len(q.Bids) && i < 5; i++ {
+		l := q.Bids[i]
+		*bids[i].p, *bids[i].v = &l.Price, &l.Volume
+	}
+	for i := 0; i < len(q.Asks) && i < 5; i++ {
+		l := q.Asks[i]
+		*asks[i].p, *asks[i].v = &l.Price, &l.Volume
+	}
+	return o
+}
+
 // KlineBar 一根K线。
 type KlineBar struct {
 	Code  string  `json:"code"`  // 带市场前缀，如 sh600000

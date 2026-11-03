@@ -18,6 +18,7 @@ func New(p tdx.Provider, keys []string) http.Handler {
 
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/quote", handleQuote(p))
+	api.HandleFunc("GET /api/v1/orderbook", handleOrderbook(p))
 	api.HandleFunc("GET /api/v1/kline", handleKline(p))
 	api.HandleFunc("GET /api/v1/minute", handleMinute(p))
 	api.HandleFunc("GET /api/v1/trade", handleTrade(p))
@@ -31,27 +32,45 @@ func New(p tdx.Provider, keys []string) http.Handler {
 
 func handleQuote(p tdx.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		raw := strings.TrimSpace(r.URL.Query().Get("codes"))
-		if raw == "" {
-			fail(w, http.StatusBadRequest, "参数 codes 不能为空")
-			return
-		}
-		codes := splitCodes(raw)
-		if len(codes) == 0 {
-			fail(w, http.StatusBadRequest, "参数 codes 不能为空")
-			return
-		}
-		if len(codes) > 50 {
-			fail(w, http.StatusBadRequest, "单次最多查询 50 只")
-			return
-		}
-		qs, err := p.Quotes(codes)
-		if err != nil {
-			fail(w, http.StatusBadGateway, err.Error())
+		qs, done := fetchQuotes(w, r, p)
+		if done {
 			return
 		}
 		ok(w, qs)
 	}
+}
+
+func handleOrderbook(p tdx.Provider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		qs, done := fetchQuotes(w, r, p)
+		if done {
+			return
+		}
+		out := make([]tdx.Orderbook, len(qs))
+		for i, q := range qs {
+			out[i] = tdx.ToOrderbook(q)
+		}
+		ok(w, out)
+	}
+}
+
+// fetchQuotes 解析 codes 参数并查询行情快照；出错时已写响应，返回 done=true。
+func fetchQuotes(w http.ResponseWriter, r *http.Request, p tdx.Provider) ([]tdx.Quote, bool) {
+	codes := splitCodes(strings.TrimSpace(r.URL.Query().Get("codes")))
+	if len(codes) == 0 {
+		fail(w, http.StatusBadRequest, "参数 codes 不能为空")
+		return nil, true
+	}
+	if len(codes) > 50 {
+		fail(w, http.StatusBadRequest, "单次最多查询 50 只")
+		return nil, true
+	}
+	qs, err := p.Quotes(codes)
+	if err != nil {
+		fail(w, http.StatusBadGateway, err.Error())
+		return nil, true
+	}
+	return qs, false
 }
 
 func handleKline(p tdx.Provider) http.HandlerFunc {
