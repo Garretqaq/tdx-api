@@ -47,7 +47,8 @@ func newPool(hosts []string, size int, timeout time.Duration) (*pool, error) {
 	return p, nil
 }
 
-// do 从池取连接，执行 fn，出错时尝试重建连接。
+// do 从池取连接，执行 fn。若连接已损坏（空闲超时被服务器关闭等），
+// 重建连接后立刻重试一次，避免调用方感知到 broken pipe。
 func (p *pool) do(fn func(c *protocol.Conn) error) error {
 	c := <-p.ch
 	if c.Closed() {
@@ -60,13 +61,24 @@ func (p *pool) do(fn func(c *protocol.Conn) error) error {
 	}
 	err := fn(c)
 	if c.Closed() {
-		var nerr error
-		c, nerr = p.dial()
+		// 连接已损坏，重建并重试一次
+		nc, nerr := p.dial()
 		if nerr != nil {
-			// 放回一个已损坏的连接，下次会再重建
-			p.ch <- c
+			p.ch <- nc // 放回新建的（下次还会重建）
+			return err // 返回原始错误
+		}
+		err = fn(nc)
+		if nc.Closed() {
+			// 重试也失败，再建一条放回池，保持池容量
+			if rc, rerr := p.dial(); rerr == nil {
+				p.ch <- rc
+			} else {
+				p.ch <- nc
+			}
 			return err
 		}
+		p.ch <- nc
+		return err
 	}
 	p.ch <- c
 	return err
