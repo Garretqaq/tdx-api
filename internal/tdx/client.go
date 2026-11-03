@@ -288,7 +288,21 @@ func (c *Client) decimalScale(full string) float64 {
 
 // ---- Klines ----
 
+// Klines 返回K线，每一行带上带市场前缀的 code，便于下游直接映射 symbol。
 func (c *Client) Klines(code string, period Period, adjust Adjust, count int) ([]KlineBar, error) {
+	full, err := protocol.FullCode(code)
+	if err != nil {
+		return nil, err
+	}
+	bars, err := c.klines(code, period, adjust, count)
+	if err != nil {
+		return nil, err
+	}
+	setCode(bars, full)
+	return bars, nil
+}
+
+func (c *Client) klines(code string, period Period, adjust Adjust, count int) ([]KlineBar, error) {
 	if adjust != AdjustNone && (period == Period1Min || period == Period5Min ||
 		period == Period15Min || period == Period30Min || period == Period60Min) {
 		return nil, errors.New("分钟K线不支持复权")
@@ -729,6 +743,7 @@ func (c *Client) Factors(code string) ([]FactorRow, error) {
 	for i, e := range evs {
 		x := e.x
 		out[i] = FactorRow{
+			Code:       full,
 			Date:       x.Time.Format("2006-01-02"),
 			Cash:       round(x.Fenhong/10, 4),
 			Bonus:      round(x.Songzhuangu/10, 4),
@@ -828,6 +843,13 @@ func aggregate(day []KlineBar, period Period) []KlineBar {
 	}
 	flush()
 	return out
+}
+
+// setCode 给每根K线填上带市场前缀的代码。
+func setCode(bars []KlineBar, full string) {
+	for i := range bars {
+		bars[i].Code = full
+	}
 }
 
 // tail 返回最近 count 条；count<=0 表示全部。

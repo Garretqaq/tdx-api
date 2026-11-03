@@ -28,6 +28,7 @@ type Level struct {
 
 // KlineBar 一根K线。
 type KlineBar struct {
+	Code  string  `json:"code"`  // 带市场前缀，如 sh600000
 	Time  string  `json:"time"`  // 北京时间 "2006-01-02 15:04"；日/周/月为 "2006-01-02"
 	Open  float64 `json:"open"`  // 单位元
 	High  float64 `json:"high"`  // 单位元
@@ -88,6 +89,7 @@ type XRXDRow struct {
 // FactorRow 一条除权事件的仿射复权系数。
 // 前复权价格 = round2(QFQMul * raw_price + QFQAdd)
 type FactorRow struct {
+	Code       string  `json:"code"`        // 带市场前缀，如 sh600000
 	Date       string  `json:"date"`        // 除权日 "2006-01-02"
 	Cash       float64 `json:"cash"`        // 每股派现（元）
 	Bonus      float64 `json:"bonus"`       // 每股送转

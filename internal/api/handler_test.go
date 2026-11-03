@@ -54,7 +54,7 @@ func (f *fakeProvider) Codes(kind string) ([]tdx.CodeInfo, error) { return f.cod
 func (f *fakeProvider) XRXD(code string) ([]tdx.XRXDRow, error) { return f.xrxd, nil }
 
 func (f *fakeProvider) Factors(code string) ([]tdx.FactorRow, error) {
-	return []tdx.FactorRow{{Date: "2026-07-16", Cash: 0.42, M: 1, C: 0.042, QFQMul: 0.95, QFQAdd: -0.42}}, nil
+	return []tdx.FactorRow{{Code: "sh600000", Date: "2026-07-16", Cash: 0.42, M: 1, C: 0.042, QFQMul: 0.95, QFQAdd: -0.42}}, nil
 }
 
 func do(h http.Handler, path string, headers map[string]string) *httptest.ResponseRecorder {
@@ -175,6 +175,34 @@ func TestKlineDefaults(t *testing.T) {
 	if f.lastCount != 100 {
 		t.Errorf("count 默认应为 100，得到 %d", f.lastCount)
 	}
+}
+
+// assertRowCode 校验响应 data 首行带有 code 字段，下游面板靠它映射 symbol。
+func assertRowCode(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var r struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &r); err != nil {
+		t.Fatalf("响应不是合法 JSON: %v", err)
+	}
+	if len(r.Data) == 0 {
+		t.Fatal("data 为空")
+	}
+	if got := r.Data[0]["code"]; got != want {
+		t.Fatalf("首行 code = %v，期望 %s", got, want)
+	}
+}
+
+func TestKlineResponseHasCode(t *testing.T) {
+	f := &fakeProvider{klines: []tdx.KlineBar{{Code: "sh600000", Time: "2026-11-03", Close: 10.09}}}
+	w := do(New(f, nil), "/api/v1/kline?code=600000", nil)
+	assertRowCode(t, w, "sh600000")
+}
+
+func TestFactorResponseHasCode(t *testing.T) {
+	w := do(New(&fakeProvider{}, nil), "/api/v1/factor?code=600000", nil)
+	assertRowCode(t, w, "sh600000")
 }
 
 func TestKlineParams(t *testing.T) {
